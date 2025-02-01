@@ -30,7 +30,7 @@ jobs:
       - uses: fregante/setup-git-user@v2.0.2
       - run: rustup update
 
-      - uses: baptiste0928/cargo-install@v3.2.0
+      - uses: baptiste0928/cargo-install@v3.3.0
         with:
           crate: aeruginous
 
