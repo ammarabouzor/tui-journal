@@ -193,9 +193,11 @@ async fn cycle_tag_exact() {
         invalid => panic!("Invalid criteria: {invalid:?}"),
     }
 
+    // 3rd iteration is for untagged entries
     app.cycle_tags_in_filter();
 
-    // Third iteration must go back to first tag
+    // 4th iteration must go back to first tag
+    app.cycle_tags_in_filter();
     match app
         .filter
         .as_ref()

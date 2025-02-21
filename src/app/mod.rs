@@ -8,6 +8,7 @@ use anyhow::{anyhow, bail, Context};
 use backend::{DataProvider, EntriesDTO, Entry, EntryDraft};
 use chrono::{DateTime, Utc};
 use colored_tags::ColoredTagsManager;
+use filter::criterion::TagFilterOption;
 use history::{Change, HistoryManager, HistoryStack};
 use rayon::prelude::*;
 use std::{
@@ -372,7 +373,8 @@ where
             let filter = self.filter.as_mut().unwrap();
 
             filter.criteria.retain(|cr| match cr {
-                FilterCriterion::Tag(tag) => all_tags.contains(tag),
+                FilterCriterion::Tag(TagFilterOption::Tag(tag)) => all_tags.contains(tag),
+                FilterCriterion::Tag(TagFilterOption::NoTags) => true,
                 FilterCriterion::Title(_) => true,
                 FilterCriterion::Content(_) => true,
                 FilterCriterion::Priority(_) => true,
@@ -419,29 +421,34 @@ where
     }
 
     pub fn cycle_tags_in_filter(&mut self) {
-        let all_tags = self.get_all_tags();
+        let mut all_tags: Vec<FilterCriterion> = self
+            .get_all_tags()
+            .iter()
+            .map(|v| FilterCriterion::Tag(TagFilterOption::Tag(v.to_string())))
+            .collect();
         if all_tags.len() <= 1 {
             return;
         }
+        all_tags.push(FilterCriterion::Tag(TagFilterOption::NoTags));
 
         if let Some(mut filter) = self.filter.take() {
             let applied_tags: Vec<String> = filter
                 .criteria
                 .iter()
                 .filter_map(|c| match c {
-                    FilterCriterion::Tag(tag) => Some(tag.to_owned()),
+                    FilterCriterion::Tag(TagFilterOption::Tag(tag)) => Some(tag.to_owned()),
                     _ => None,
                 })
                 .collect();
             match applied_tags.len() {
                 // No existing tags => apply the first one.
                 0 => {
-                    filter.criteria.push(FilterCriterion::Tag(
+                    filter.criteria.push(
                         all_tags
                             .into_iter()
                             .next()
                             .expect("Bound check done at the beginning"),
-                    ));
+                    );
                 }
                 // One tag exist only => Cycle to the next one.
                 1 => {
@@ -449,31 +456,44 @@ where
                         .criteria
                         .iter_mut()
                         .find_map(|c| match c {
-                            FilterCriterion::Tag(tag) => Some(tag),
+                            FilterCriterion::Tag(TagFilterOption::Tag(tag)) => Some(tag),
                             _ => None,
                         })
                         .expect("Criteria checked for having one Tag only");
 
                     let tag_pos = all_tags
                         .iter()
-                        .position(|t| t == current_tag)
+                        .position(|t| {
+                            *t == FilterCriterion::Tag(TagFilterOption::Tag(current_tag.clone()))
+                        })
                         .unwrap_or_default();
 
                     let next_index = (tag_pos + 1) % all_tags.len();
-
-                    *current_tag = all_tags.into_iter().nth(next_index).unwrap();
+                    match all_tags.get(next_index) {
+                        Some(FilterCriterion::Tag(TagFilterOption::Tag(next_tag))) => {
+                            *current_tag = next_tag.clone();
+                        }
+                        _ => {
+                            filter
+                                .criteria
+                                .retain(|c| !matches!(c, FilterCriterion::Tag(_)));
+                            filter
+                                .criteria
+                                .push(FilterCriterion::Tag(TagFilterOption::NoTags));
+                        }
+                    }
                 }
                 // Many tags exist => Clean them and apply the first one.
                 _ => {
                     filter
                         .criteria
                         .retain(|c| !matches!(c, FilterCriterion::Tag(_)));
-                    filter.criteria.push(FilterCriterion::Tag(
+                    filter.criteria.push(
                         all_tags
                             .into_iter()
                             .next()
                             .expect("Bound check done at the beginning"),
-                    ));
+                    );
                 }
             }
 
@@ -481,12 +501,12 @@ where
         } else {
             // Apply filter with the first criteria
             let mut filter = Filter::default();
-            filter.criteria.push(FilterCriterion::Tag(
+            filter.criteria.push(
                 all_tags
                     .into_iter()
                     .next()
                     .expect("Bound check done at the beginning"),
-            ));
+            );
             self.apply_filter(Some(filter));
         }
     }

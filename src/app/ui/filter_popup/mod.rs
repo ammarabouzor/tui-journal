@@ -10,7 +10,7 @@ use ratatui::{
 use tui_textarea::{CursorMove, TextArea};
 
 use crate::app::{
-    filter::{CriteriaRelation, Filter, FilterCriterion},
+    filter::{criterion::TagFilterOption, CriteriaRelation, Filter, FilterCriterion},
     keymap::Input,
 };
 
@@ -53,8 +53,11 @@ impl FilterPopup<'_> {
         let mut priority_text = String::default();
 
         filter.criteria.into_iter().for_each(|cr| match cr {
-            FilterCriterion::Tag(tag) => {
+            FilterCriterion::Tag(TagFilterOption::Tag(tag)) => {
                 selected_tags.insert(tag);
+            }
+            FilterCriterion::Tag(TagFilterOption::NoTags) => {
+                selected_tags.clear();
             }
             FilterCriterion::Title(title_search) => title_text = title_search,
             FilterCriterion::Content(content_search) => content_text = content_search,
@@ -428,7 +431,7 @@ impl FilterPopup<'_> {
         let mut critria: Vec<_> = self
             .selected_tags
             .iter()
-            .map(|tag| FilterCriterion::Tag(tag.into()))
+            .map(|tag| FilterCriterion::Tag(TagFilterOption::Tag(tag.into())))
             .collect();
 
         let title_filter = self
